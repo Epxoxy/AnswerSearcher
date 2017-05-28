@@ -24,12 +24,15 @@ namespace WpfApp2
     /// </summary>
     public partial class MainWindow : Window
     {
-        private string subjectPattern = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<br.+?<table.+?>([\\s\\S]+?.+?)<\\/table>";
+        private string subjectPattern = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>";
         private string optionPattern = "<input.+?id=\"(.+?)\".+?value=\"(.+?)\"><label.+?>(.+?)<";
+        private string rightPattern = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>[\\s\\S]+?正确答案为:(.+?)<";
         private string jsFormat = "var {0} = document.getElementById(\"{1}\");{0}.checked = true;";
         private string jsFormat1 = "var found = new Array({0});\nfor(int i=0;i<found.length;i++){{\nfound[i].checked = true;\n}}";
+        private string store = Environment.CurrentDirectory + "\\subjects.txt";
         private string subjectBankText;
         private List<SubjectPlus> subjectSrc;
+        private List<SubjectPlus> lastFound;
         private List<Subject> subjectBank;
 
         public MainWindow()
@@ -61,6 +64,14 @@ namespace WpfApp2
         {
             subjectBank = readSubjects(Properties.Resources.subjects);
             subjectBankText = Properties.Resources.subjects;
+            FileInfo info = new FileInfo(store);
+            if (info.Exists)
+            {
+                string othersBankText = info.OpenText().ReadToEnd();
+                subjectBankText += othersBankText;
+                var otherBank = readSubjects(othersBankText);
+                subjectBank.AddRange(otherBank);
+            }
             bankCount.Text = subjectBank.Count.ToString();
         }
 
@@ -72,15 +83,95 @@ namespace WpfApp2
 
         private void runBtnClick(object sender, RoutedEventArgs e)
         {
-            string js = fitAnswerGenJS(subjectSrc, subjectBank);
+            string js = fitAnswerGenJS(subjectSrc, subjectBank, out lastFound);
             rs.Text = js;
             System.Diagnostics.Debug.WriteLine(js);
         }
 
-        
+        private double findSimilarity(List<Subject> src, Subject dst)
+        {
+            var computer = new SimilarityComputer();
+            double max = 0d;
+            foreach (var subject in src)
+            {
+                double similarity = 0;
+                computer.SimilarText(dst.HoleText, subject.HoleText, out similarity);
+                if (similarity > max)
+                    max = similarity;
+            }
+            return max;
+        }
+
+        private void addBankBtnClick(object sender, RoutedEventArgs e)
+        {
+            var newSubjects = readRightSubject(correctBox.Text);
+            var remainSubjects = new List<Subject>();
+            var computer = new SimilarityComputer();
+            if(subjectSrc != null)
+            {
+                for (int i = 0; i < subjectSrc.Count; i++)
+                {
+                    var subj = subjectSrc[i];
+                    if (lastFound.Contains(subj)) continue;
+                    double max = findSimilarity(newSubjects, subj);
+                    if (max >= 70) continue;
+                    max = findSimilarity(subjectBank, subj);
+                    if (max >= 70) continue;
+                    subj.HoleText += "A";
+                    subj.Answer = "A";
+                    remainSubjects.Add(subj);
+                }
+            }
+            System.Diagnostics.Debug.WriteLine("Remain "+remainSubjects.Count);
+            System.Diagnostics.Debug.WriteLine("New "+newSubjects.Count);
+            var builder = new StringBuilder();
+            if (newSubjects.Count > 0)
+                for (int i = 0; i < newSubjects.Count; i++)
+                    builder.AppendLine(newSubjects[i].HoleText);
+            if (remainSubjects.Count > 0)
+                for (int i = 0; i < newSubjects.Count; i++)
+                    builder.AppendLine(newSubjects[i].HoleText);
+            if(builder.Length > 0)
+                saveToFile(store, builder.ToString());
+        }
+
+
+        private List<Subject> readRightSubject(string input)
+        {
+            var subjects = new List<Subject>();
+            var rRight = new Regex(rightPattern);
+            var rOption = new Regex(optionPattern);
+            var matches = rRight.Matches(input);
+            char[] options = { 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
+            char sp = ':';
+            foreach(Match match in matches)
+            {
+                string question = match.Groups[1].Value;
+                string answer = match.Groups[3].Value;
+                var matches2 = rOption.Matches(match.Groups[2].Value);
+                var builder = new StringBuilder();
+                for (int i = 0; i< matches2.Count; i++)
+                {
+                    string value = matches2[i].Groups[3].Value.Replace(" ", "");
+                    if(value[0] != options[i])
+                        builder.Append(options[i]);
+                    if (value[1] != sp)
+                        builder.Append(sp);
+                    builder.Append(value);
+                    builder.Append(",");
+                }
+                builder.Replace("&nbsp;", "").Replace(" ", "");
+                subjects.Add(new Subject(question, builder.ToString(), answer)
+                {
+                    HoleText = question + builder.ToString() + answer
+                });
+            }
+            return subjects;
+        }
+
         private List<Subject> readSubjects(string input)
         {
-            var r = new Regex("(.+?)\u3002.+?([A-Za-z].+)");
+            var r = new Regex("(.+?)[\u3002\uff1f?].+?([A-Za-z].+)");
             var matches = r.Matches(input);
             var subjects = new List<Subject>();
             foreach (Match match in matches)
@@ -103,8 +194,47 @@ namespace WpfApp2
             return subjects;
         }
 
-        private string fitAnswerGenJS(List<SubjectPlus> questionSrc, List<Subject> answerSrc)
+        private List<SubjectPlus> readRegexInputText()
         {
+            var subjectPlusList = new List<SubjectPlus>();
+            string input = inputBox.Text;
+            var subjectRegex = new Regex(subjectPtnBox.Text);
+            var optionRegex = new Regex(optionPtnBox.Text);
+            var matches = subjectRegex.Matches(input);
+            foreach (Match match in matches)
+            {
+                var builder = new StringBuilder();
+                string question = match.Groups[1].Value;
+                string options = match.Groups[2].Value;
+                //
+                builder.Append(question);
+                //
+                var subPlus = new SubjectPlus(question, options)
+                {
+                    OptionsList = new List<Option>()
+                };
+                var subMatches = optionRegex.Matches(options);
+                foreach (Match subMatch in subMatches)
+                {
+                    subPlus.OptionsList.Add(new Option
+                    {
+                        Mark = subMatch.Groups[2].Value,
+                        Id = subMatch.Groups[1].Value,
+                        Text = subMatch.Groups[3].Value
+                    });
+                    builder.Append(subMatch.Groups[2].Value);
+                    builder.Append(",");
+                    builder.Append(subMatch.Groups[3].Value);
+                }
+                subPlus.HoleText = builder.ToString();
+                subjectPlusList.Add(subPlus);
+            }
+            return subjectPlusList;
+        }
+
+        private string fitAnswerGenJS(List<SubjectPlus> questionSrc, List<Subject> answerSrc, out List<SubjectPlus> found)
+        {
+            found = null;
             //TODO Alert message
             if (questionSrc == null || answerSrc == null)
                 return string.Empty;
@@ -114,6 +244,7 @@ namespace WpfApp2
             var computer = new SimilarityComputer();
             string question = string.Empty;
             string holeText = string.Empty;
+            found = new List<SubjectPlus>();
             for (int i = 0; i < questionSrc.Count; i++)
             {
                 var plus = questionSrc[i];
@@ -159,6 +290,7 @@ namespace WpfApp2
                             var option = plus.OptionsList[k];
                             //builder.AppendLine($"\"{option.Id}\",");
                             builder.AppendLine(string.Format(jsFormat, "radio_" + i, option.Id));
+                            found.Add(plus);
                             break;
                         }
                     }
@@ -169,41 +301,27 @@ namespace WpfApp2
             //return string.Format(jsFormat1, objs.Remove(objs.Length - 1));
         }
 
-        private List<SubjectPlus> readRegexInputText()
+        private void saveToFile(string path, string text)
         {
-            var subjectPlusList = new List<SubjectPlus>();
-            string input = inputBox.Text;
-            var subjectRegex = new Regex(subjectPtnBox.Text);
-            var optionRegex = new Regex(optionPtnBox.Text);
-            var matches = subjectRegex.Matches(input);
-            foreach (Match match in matches)
+            StreamWriter writer = null;
+            try
             {
-                var builder = new StringBuilder();
-                string question = match.Groups[1].Value;
-                string options = match.Groups[2].Value;
-                //
-                builder.Append(question);
-                //
-                var subPlus = new SubjectPlus(question, options)
-                {
-                    OptionsList = new List<Option>()
-                };
-                var subMatches = optionRegex.Matches(options);
-                foreach (Match subMatch in subMatches)
-                {
-                    subPlus.OptionsList.Add(new Option
-                    {
-                        Mark = subMatch.Groups[2].Value,
-                        Id = subMatch.Groups[1].Value,
-                        Text = subMatch.Groups[3].Value
-                    });
-                    builder.Append(subMatch.Groups[3].Value);
-                }
-                subPlus.HoleText = builder.ToString();
-                subjectPlusList.Add(subPlus);
+                FileInfo fileInfo = new FileInfo(path);
+                writer = new StreamWriter(fileInfo.Open(FileMode.OpenOrCreate));
+                writer.BaseStream.Seek(0, SeekOrigin.End);
+                writer.WriteLine(text);
             }
-            return subjectPlusList;
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(ex.Message);
+            }
+            finally
+            {
+                if (writer != null)
+                    writer.Dispose();
+            }
         }
+
     }
 
     struct Option
