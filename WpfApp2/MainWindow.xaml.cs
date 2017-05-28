@@ -152,9 +152,10 @@ namespace WpfApp2
         
         private void addRepertoryBtnClick(object sender, RoutedEventArgs e)
         {
+            string mistakeText = mistakeBox.Text;
             asyncDoing(() =>
             {
-                var newSubjects = readMistakesSubject(mistakeBox.Text);
+                var newSubjects = readMistakesSubject(mistakeText);
                 var remainSubjects = new List<Subject>();
                 if (inputList != null)
                 {
