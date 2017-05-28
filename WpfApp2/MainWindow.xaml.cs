@@ -1,19 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Data.OleDb;
-using System.Data;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -24,16 +12,17 @@ namespace WpfApp2
     /// </summary>
     public partial class MainWindow : Window
     {
-        private string subjectPattern = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>";
-        private string optionPattern = "<input.+?id=\"(.+?)\".+?value=\"(.+?)\"><label.+?>(.+?)<";
-        private string rightPattern = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>[\\s\\S]+?正确答案为:(.+?)<";
-        private string jsFormat = "var {0} = document.getElementById(\"{1}\");{0}.checked = true;";
-        private string jsFormat1 = "var found = new Array({0});\nfor(int i=0;i<found.length;i++){{\nfound[i].checked = true;\n}}";
-        private string store = Environment.CurrentDirectory + "\\subjects.txt";
-        private string subjectBankText;
-        private List<SubjectPlus> subjectSrc;
-        private List<SubjectPlus> lastFound;
-        private List<Subject> subjectBank;
+        private const string subjectPAT = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>";
+        private const string optionPAT = "<input.+?id=\"(.+?)\".+?value=\"(.+?)\"><label.+?>(.+?)<";
+        private const string optionAnswerPAT = "<div.+?><span.+?class=\"lb.+?>.+?\\.([\\s\\S]+?)<.+?<table.+?>([\\s\\S]+?.+?)<\\/table>[\\s\\S]+?正确答案为:(.+?)<";
+        private const string jsFormat = "var {0} = document.getElementById(\"{1}\");{0}.checked = true;";
+        private const string jsFormatLite = "var found = new Array({0});\nfor(var i=0;i<found.length;i++){{\nfound[i].checked = true;\n}}";
+        private const string jsCheckAll = "//for(var i=0;i<50;i++){document.getElementById(\"rbtl\"+i+\"_0\").checked=true;}\n";
+        private string storeFileName = Environment.CurrentDirectory + "\\subjects.txt";
+        private List<SubjectPlus> inputList;
+        private List<SubjectPlus> foundList;
+        private List<Subject> repertory;
+        private string repertoryText;
 
         public MainWindow()
         {
@@ -41,88 +30,117 @@ namespace WpfApp2
             this.Loaded += onThisLoaded;
         }
 
+
         private void onThisLoaded(object sender, RoutedEventArgs e)
         {
             this.Loaded -= onThisLoaded;
-            subjectPtnBox.Text = subjectPattern;
-            optionPtnBox.Text = optionPattern;
-            loadDefBtnClick(this, null);
+            subjectPATBox.Text = subjectPAT;
+            optionPATBox.Text = optionPAT;
+            loadRepertoryBtnClick(this, null);
         }
 
-        private void openBtnClick(object sender, RoutedEventArgs e)
+        private void openFileBtnClick(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog();
             if (dialog.ShowDialog() == true)
             {
-                subjectBankText = new StreamReader(dialog.FileName).ReadToEnd();
-                subjectBank = readSubjects(subjectBankText);
-                bankCount.Text = subjectBank.Count.ToString();
+                repertoryText = new StreamReader(dialog.FileName).ReadToEnd();
+                repertory = readSubjects(repertoryText);
+                repertoryCount.Text = repertory.Count.ToString();
             }
         }
 
-        private void loadDefBtnClick(object sender, RoutedEventArgs e)
+        private void loadRepertoryBtnClick(object sender, RoutedEventArgs e)
         {
-            subjectBank = readSubjects(Properties.Resources.subjects);
-            subjectBankText = Properties.Resources.subjects;
-            FileInfo info = new FileInfo(store);
+            repertory = readSubjects(Properties.Resources.subjects);
+            repertoryText = Properties.Resources.subjects;
+            FileInfo info = new FileInfo(storeFileName);
             if (info.Exists)
             {
                 string othersBankText = info.OpenText().ReadToEnd();
-                subjectBankText += othersBankText;
+                repertoryText += othersBankText;
                 var otherBank = readSubjects(othersBankText);
-                subjectBank.AddRange(otherBank);
+                if (repertory == null)
+                    repertory = otherBank;
+                else repertory.AddRange(otherBank);
             }
-            bankCount.Text = subjectBank.Count.ToString();
+            repertoryCount.Text = repertory.Count.ToString();
         }
-
-        private void rInputBtnClick(object sender, RoutedEventArgs e)
+        
+        private void readInputBtnClick(object sender, RoutedEventArgs e)
         {
-            subjectSrc = readRegexInputText();
-            subjCount.Text  = subjectSrc.Count.ToString();
+            inputList = readInputText(subjectPATBox.Text, optionPATBox.Text);
+            inputCount.Text  = inputList.Count.ToString();
         }
 
         private void runBtnClick(object sender, RoutedEventArgs e)
         {
-            string js = fitAnswerGenJS(subjectSrc, subjectBank, out lastFound);
-            rs.Text = js;
+            string js = fitAnswerGenJS(inputList, repertory, out foundList);
+            rsBox.Text = jsCheckAll + js;
             System.Diagnostics.Debug.WriteLine(js);
         }
 
-        private double findSimilarity(List<Subject> src, Subject dst)
+        private void checkRepertoryBtnClick(object sender, RoutedEventArgs e)
         {
             var computer = new SimilarityComputer();
-            double max = 0d;
-            foreach (var subject in src)
+            char[] chars = new char[] { 'A', 'B', 'C', 'D', 'E', 'F', 'a', 'b', 'c', 'd', 'e', 'f' };
+            string holeText = string.Empty;
+            var builder = new StringBuilder(repertoryText);
+            for (int i = 0;i < repertory.Count; i++)
             {
-                double similarity = 0;
-                computer.SimilarText(dst.HoleText, subject.HoleText, out similarity);
-                if (similarity > max)
-                    max = similarity;
-            }
-            return max;
-        }
-
-        private void addBankBtnClick(object sender, RoutedEventArgs e)
-        {
-            var newSubjects = readRightSubject(correctBox.Text);
-            var remainSubjects = new List<Subject>();
-            var computer = new SimilarityComputer();
-            if(subjectSrc != null)
-            {
-                for (int i = 0; i < subjectSrc.Count; i++)
+                int index = 0;
+                holeText = repertory[i].HoleText;
+                //Check if anwer is not in option
+                if (holeText.IndexOfAny(chars) > 0
+                    && (index = holeText.IndexOf(repertory[i].Answer)) > 0)
                 {
-                    var subj = subjectSrc[i];
-                    if (lastFound.Contains(subj)) continue;
-                    double max = findSimilarity(newSubjects, subj);
-                    if (max >= 70) continue;
-                    max = findSimilarity(subjectBank, subj);
+                    if (holeText.IndexOf(repertory[i].Answer, index + 1, holeText.Length - index - 1) < 0)
+                    {
+                        builder.Replace(holeText, "");
+                        System.Diagnostics.Debug.WriteLine("******************");
+                        System.Diagnostics.Debug.WriteLine("");
+                        System.Diagnostics.Debug.WriteLine(repertory[i].HoleText);
+                        //System.Diagnostics.Debug.WriteLine(subjectBank[j].HoleText);
+                    }
+                }
+                /*for (int j = 0; j < subjectBank.Count; j++)
+                {
+                    if (i == j) continue;
+                    double similarity = 0;
+                    computer.SimilarText(subjectBank[i].HoleText, subjectBank[j].HoleText, out similarity);
+                    if (similarity > 70)
+                    {
+                        System.Diagnostics.Debug.WriteLine("******************");
+                        System.Diagnostics.Debug.WriteLine("");
+                        System.Diagnostics.Debug.WriteLine(subjectBank[i].HoleText);
+                        System.Diagnostics.Debug.WriteLine(subjectBank[j].HoleText);
+                    }
+                }*/
+            }
+            //saveToFile(Environment.CurrentDirectory + "\\subjectsCopy.txt", builder.ToString());
+        }
+        
+        private void addRepertoryBtnClick(object sender, RoutedEventArgs e)
+        {
+            var newSubjects = readMistakesSubject(mistakeBox.Text);
+            var remainSubjects = new List<Subject>();
+            if(inputList != null)
+            {
+                for (int i = 0; i < inputList.Count; i++)
+                {
+                    Subject maxObj;
+                    var subj = inputList[i];
+                    if (foundList.Contains(subj)) continue;
+                    double max = findSimilarity(newSubjects, subj, out maxObj);
+                    if (max >= 70) { continue; }
+                    max = findSimilarity(repertory, subj, out maxObj);
                     if (max >= 70) continue;
                     subj.HoleText += "A";
                     subj.Answer = "A";
                     remainSubjects.Add(subj);
                 }
             }
-            System.Diagnostics.Debug.WriteLine("Remain "+remainSubjects.Count);
+            System.Diagnostics.Debug.WriteLine("Remain " + remainSubjects.Count);
             System.Diagnostics.Debug.WriteLine("New "+newSubjects.Count);
             var builder = new StringBuilder();
             if (newSubjects.Count > 0)
@@ -132,16 +150,47 @@ namespace WpfApp2
                 for (int i = 0; i < newSubjects.Count; i++)
                     builder.AppendLine(newSubjects[i].HoleText);
             if(builder.Length > 0)
-                saveToFile(store, builder.ToString());
+                saveToFile(storeFileName, builder.ToString());
+        }
+        
+        private void clearBtnClick(object sender, RoutedEventArgs e)
+        {
+            inputBox.Text = string.Empty;
+            rsBox.Text = string.Empty;
+            mistakeBox.Text = string.Empty;
+            inputCount.Text = "0";
+            if (inputList != null)
+                inputList.Clear();
+            if(foundList != null)
+                foundList.Clear();
         }
 
 
-        private List<Subject> readRightSubject(string input)
+
+        private double findSimilarity(List<Subject> src, Subject dst, out Subject maxObj)
+        {
+            maxObj = null;
+            var computer = new SimilarityComputer();
+            double max = 0d;
+            foreach (var subject in src)
+            {
+                double similarity = 0;
+                computer.SimilarText(dst.HoleText, subject.HoleText, out similarity);
+                if (similarity > max)
+                {
+                    max = similarity;
+                    maxObj = subject;
+                }
+            }
+            return max;
+        }
+
+        private List<Subject> readMistakesSubject(string input)
         {
             var subjects = new List<Subject>();
-            var rRight = new Regex(rightPattern);
-            var rOption = new Regex(optionPattern);
-            var matches = rRight.Matches(input);
+            var rAnswer = new Regex(optionAnswerPAT);
+            var rOption = new Regex(optionPAT);
+            var matches = rAnswer.Matches(input);
             char[] options = { 'A', 'B', 'C', 'D', 'E', 'F', 'G' };
             char sp = ':';
             foreach(Match match in matches)
@@ -194,12 +243,12 @@ namespace WpfApp2
             return subjects;
         }
 
-        private List<SubjectPlus> readRegexInputText()
+        private List<SubjectPlus> readInputText(string subjectPAT, string optionPAT)
         {
             var subjectPlusList = new List<SubjectPlus>();
             string input = inputBox.Text;
-            var subjectRegex = new Regex(subjectPtnBox.Text);
-            var optionRegex = new Regex(optionPtnBox.Text);
+            var subjectRegex = new Regex(subjectPAT);
+            var optionRegex = new Regex(optionPAT);
             var matches = subjectRegex.Matches(input);
             foreach (Match match in matches)
             {
@@ -250,20 +299,37 @@ namespace WpfApp2
                 var plus = questionSrc[i];
                 question = plus.Question;
                 holeText = plus.HoleText;
-                int index = subjectBankText.IndexOf(question);
                 string answer = string.Empty;
-                if (index > 0)
+                //
+                int index = repertoryText.IndexOf(question);
+                if(index > 0)
                 {
-                    for(int x = index; x < subjectBankText.Length; x++)
+                    var answers = new Dictionary<string, int>();
+                    do
                     {
-                        if(subjectBankText[x] == '\r' || subjectBankText[x] == '\n')
+                        int answerIndex = repertoryText.IndexOfAny(new char[] { '\r', '\n' }, index);
+                        if(answerIndex > 0)
                         {
-                            answer = subjectBankText[x - 1].ToString();
-                            break;
+                            answer = repertoryText[answerIndex - 1].ToString();
+                            if (!answers.ContainsKey(answer))
+                                answers.Add(answer, 0);
+                            answers[answer] += 1;
+                        }
+                    } while ((index = repertoryText.IndexOf(question, index + 1)) >= 0);
+                    //Find max for the same question of different answer
+                    int max = 0;
+                    foreach (var ans in answers)
+                    {
+                        if (ans.Value > max)
+                        {
+                            max = ans.Value;
+                            answer = ans.Key;
                         }
                     }
-                }else
+                }
+                else
                 {
+                    //Find the max similar if same question not found
                     int foundIndex = -1;
                     double maxSimilarity = 70;
                     for (int j = 0; j < answerSrc.Count; j++)
@@ -321,7 +387,6 @@ namespace WpfApp2
                     writer.Dispose();
             }
         }
-
     }
 
     struct Option

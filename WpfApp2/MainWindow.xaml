@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:WpfApp2"
         mc:Ignorable="d" MinWidth="400" MinHeight="400"
-        Title="MainWindow" Height="400" Width="525">
+        Title="MainWindow" Height="432" Width="525">
     <Window.Resources>
         <SolidColorBrush x:Key="TextBox.Static.Border" Color="#FFABAdB3"/>
         <SolidColorBrush x:Key="TextBox.MouseOver.Border" Color="#FF7EB4EA"/>
@@ -114,7 +114,7 @@
                              Tag="Input"
                              Template="{StaticResource placeholder}">
                         </TextBox>
-                        <TextBox x:Name="rs" Text="" MinWidth="300" VerticalContentAlignment="Center"
+                        <TextBox x:Name="rsBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
                              Padding="0,7" Margin="0,7"
                              BorderThickness="0,0,0,2" Background="{x:Null}" 
                              AcceptsReturn="True"
@@ -125,7 +125,7 @@
                              Tag="Result"
                              Template="{StaticResource placeholder}">
                         </TextBox>
-                        <TextBox x:Name="correctBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
+                        <TextBox x:Name="mistakeBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
                              Padding="0,7" Margin="0,7"
                              BorderThickness="0,0,0,2" Background="{x:Null}" 
                              AcceptsReturn="True"
@@ -136,13 +136,13 @@
                              Tag="Error bank"
                              Template="{StaticResource placeholder}">
                         </TextBox>
-                        <TextBox x:Name="subjectPtnBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
+                        <TextBox x:Name="subjectPATBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
                              Padding="0,7" Margin="0,7"
                              BorderThickness="0,0,0,2" Background="{x:Null}" 
                              Tag="Subject Pattern"
                              Template="{StaticResource placeholder}">
                         </TextBox>
-                        <TextBox x:Name="optionPtnBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
+                        <TextBox x:Name="optionPATBox" Text="" MinWidth="300" VerticalContentAlignment="Center"
                              Padding="0,7" Margin="0,7"
                              BorderThickness="0,0,0,2" Background="{x:Null}" 
                              Tag="Option Pattern"
@@ -154,24 +154,26 @@
                                 <ColumnDefinition />
                             </Grid.ColumnDefinitions>
                             <TextBlock VerticalAlignment="Center" FontSize="18">
-                            <Run Text="Subject Bank ("/>
-                            <Run x:Name="bankCount" Text="0" />
+                            <Run Text="Repertory ("/>
+                            <Run x:Name="repertoryCount" Text="0" />
                             <Run Text=")" />
                             </TextBlock>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="7,4">
-                                <Button x:Name="openBtn" Content="Open" Padding="10,4" Margin="0,0,7,0" Click="openBtnClick" Style="{StaticResource ButtonStyle1}" />
-                                <Button x:Name="defBtn" Content="Load" Padding="10,4" Margin="0,0,7,0" Click="loadDefBtnClick" Style="{StaticResource ButtonStyle1}" />
+                                <Button x:Name="openBtn" Content="Open" Padding="10,4" Margin="0,0,7,0" Click="openFileBtnClick" Style="{StaticResource ButtonStyle1}" />
+                                <Button x:Name="loadBtn" Content="Load" Padding="10,4" Margin="0,0,7,0" Click="loadRepertoryBtnClick" Style="{StaticResource ButtonStyle1}" />
                             </StackPanel>
                         </Grid>
                         <TextBlock VerticalAlignment="Center" FontSize="18" Margin="0,7" Foreground="#00897b">
-                            <Run Text="ReadSubject ("/>
-                            <Run x:Name="subjCount" Text="0" />
+                            <Run Text="Read Input ("/>
+                            <Run x:Name="inputCount" Text="0" />
                             <Run Text=")" />
                         </TextBlock>
                         <StackPanel Orientation="Horizontal" Margin="0">
-                            <Button x:Name="rInputBtn" BorderThickness="2,0,0,0" Content="Read input" Padding="20,10" Margin="0,0,7,0" Click="rInputBtnClick" />
-                            <Button x:Name="runBtn" BorderThickness="2,0,0,0" Content="Compute" Padding="20,10" Margin="0,0,7,0" Click="runBtnClick"/>
-                            <Button x:Name="addBankBtn" BorderThickness="2,0,0,0" Content="Combine bank" Padding="20,10" Margin="0,0,7,0" Click="addBankBtnClick"/>
+                            <Button x:Name="readInputBtn" BorderThickness="2,0,0,0" Content="Read input" Padding="10,10" Margin="0,0,7,0" Click="readInputBtnClick" />
+                            <Button x:Name="runBtn" BorderThickness="2,0,0,0" Content="Compute" Padding="10,10" Margin="0,0,7,0" Click="runBtnClick"/>
+                            <Button x:Name="addBankBtn" BorderThickness="2,0,0,0" Content="Correction" Padding="10,10" Margin="0,0,7,0" Click="addRepertoryBtnClick"/>
+                            <Button x:Name="checkBankBtn" BorderThickness="2,0,0,0" Content="Check bank" Padding="10,10" Margin="0,0,7,0" Click="checkRepertoryBtnClick"/>
+                            <Button x:Name="clearBtn" BorderThickness="2,0,0,0" Content="Clear basic" Padding="10,10" Margin="0,0,7,0" Click="clearBtnClick"/>
                         </StackPanel>
                     </ItemsControl>
                 </Border>
