@@ -4,6 +4,12 @@ using System.Text;
 using System.Windows;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Windows.Controls;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Timers;
+using System.Windows.Shapes;
 
 namespace WpfApp2
 {
@@ -52,32 +58,56 @@ namespace WpfApp2
 
         private void loadRepertoryBtnClick(object sender, RoutedEventArgs e)
         {
-            repertory = readSubjects(Properties.Resources.subjects);
-            repertoryText = Properties.Resources.subjects;
-            FileInfo info = new FileInfo(storeFileName);
-            if (info.Exists)
+            asyncDoing(() =>
             {
-                string othersBankText = info.OpenText().ReadToEnd();
-                repertoryText += othersBankText;
-                var otherBank = readSubjects(othersBankText);
-                if (repertory == null)
-                    repertory = otherBank;
-                else repertory.AddRange(otherBank);
-            }
-            repertoryCount.Text = repertory.Count.ToString();
+                repertory = readSubjects(Properties.Resources.subjects);
+                repertoryText = Properties.Resources.subjects;
+                FileInfo info = new FileInfo(storeFileName);
+                if (info.Exists)
+                {
+                    string othersBankText = info.OpenText().ReadToEnd();
+                    repertoryText += othersBankText;
+                    var otherBank = readSubjects(othersBankText);
+                    if (repertory == null)
+                        repertory = otherBank;
+                    else repertory.AddRange(otherBank);
+                }
+                Dispatcher.Invoke(() =>
+                {
+                    repertoryCount.Text = repertory.Count.ToString();
+                });
+            });
         }
         
         private void readInputBtnClick(object sender, RoutedEventArgs e)
         {
-            inputList = readInputText(subjectPATBox.Text, optionPATBox.Text);
-            inputCount.Text  = inputList.Count.ToString();
+            asyncDoing(() =>
+            {
+                string subjectPAT = null, optionPAT = null, input = null;
+                Dispatcher.Invoke(() =>
+                {
+                    subjectPAT = subjectPATBox.Text;
+                    optionPAT = optionPATBox.Text;
+                    input = inputBox.Text;
+                });
+                inputList = readInputText(subjectPAT, optionPAT, input);
+                Dispatcher.Invoke(() =>
+                {
+                    inputCount.Text = inputList.Count.ToString();
+                });
+            });
         }
 
         private void runBtnClick(object sender, RoutedEventArgs e)
         {
-            string js = fitAnswerGenJS(inputList, repertory, out foundList);
-            rsBox.Text = jsCheckAll + js;
-            System.Diagnostics.Debug.WriteLine(js);
+            asyncDoing(() =>
+            {
+                string js = fitAnswerGenJS(inputList, repertory, out foundList);
+                Dispatcher.Invoke(() =>
+                {
+                    rsBox.Text = jsCheckAll + js;
+                });
+            });
         }
 
         private void checkRepertoryBtnClick(object sender, RoutedEventArgs e)
@@ -122,35 +152,41 @@ namespace WpfApp2
         
         private void addRepertoryBtnClick(object sender, RoutedEventArgs e)
         {
-            var newSubjects = readMistakesSubject(mistakeBox.Text);
-            var remainSubjects = new List<Subject>();
-            if(inputList != null)
+            asyncDoing(() =>
             {
-                for (int i = 0; i < inputList.Count; i++)
+                var newSubjects = readMistakesSubject(mistakeBox.Text);
+                var remainSubjects = new List<Subject>();
+                if (inputList != null)
                 {
-                    Subject maxObj;
-                    var subj = inputList[i];
-                    if (foundList.Contains(subj)) continue;
-                    double max = findSimilarity(newSubjects, subj, out maxObj);
-                    if (max >= 70) { continue; }
-                    max = findSimilarity(repertory, subj, out maxObj);
-                    if (max >= 70) continue;
-                    subj.HoleText += "A";
-                    subj.Answer = "A";
-                    remainSubjects.Add(subj);
+                    for (int i = 0; i < inputList.Count; i++)
+                    {
+                        Subject maxObj;
+                        var subj = inputList[i];
+                        if (foundList.Contains(subj)) continue;
+                        double max = findSimilarity(newSubjects, subj, out maxObj);
+                        if (max >= 70) { continue; }
+                        max = findSimilarity(repertory, subj, out maxObj);
+                        if (max >= 70) continue;
+                        subj.HoleText += "A";
+                        subj.Answer = "A";
+                        remainSubjects.Add(subj);
+                    }
                 }
-            }
-            System.Diagnostics.Debug.WriteLine("Remain " + remainSubjects.Count);
-            System.Diagnostics.Debug.WriteLine("New "+newSubjects.Count);
-            var builder = new StringBuilder();
-            if (newSubjects.Count > 0)
-                for (int i = 0; i < newSubjects.Count; i++)
-                    builder.AppendLine(newSubjects[i].HoleText);
-            if (remainSubjects.Count > 0)
-                for (int i = 0; i < newSubjects.Count; i++)
-                    builder.AppendLine(newSubjects[i].HoleText);
-            if(builder.Length > 0)
-                saveToFile(storeFileName, builder.ToString());
+                System.Diagnostics.Debug.WriteLine("Remain " + remainSubjects.Count);
+                System.Diagnostics.Debug.WriteLine("New " + newSubjects.Count);
+                var builder = new StringBuilder();
+                if (newSubjects.Count > 0)
+                    for (int i = 0; i < newSubjects.Count; i++)
+                        builder.AppendLine(newSubjects[i].HoleText);
+                if (remainSubjects.Count > 0)
+                    for (int i = 0; i < newSubjects.Count; i++)
+                        builder.AppendLine(newSubjects[i].HoleText);
+                if (builder.Length > 0)
+                    saveToFile(storeFileName, builder.ToString());
+            }, () =>
+            {
+                loadRepertoryBtnClick(this, null);
+            });
         }
         
         private void clearBtnClick(object sender, RoutedEventArgs e)
@@ -166,6 +202,24 @@ namespace WpfApp2
         }
 
 
+        private async void asyncDoing(Action action, Action continueAtion = null)
+        {
+            processBar.Visibility = Visibility.Visible;
+            processBar.IsIndeterminate = true;
+            var rectangle = new Rectangle
+            {
+                Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#11f4f4f4"))
+            };
+            using (var overlay = OverlayAdorner<UIElement>.Overlay(this.Content as UIElement, rectangle))
+            {
+                Keyboard.Focus(rectangle);
+                await Task.Run(action);
+                Keyboard.ClearFocus();
+            }
+            processBar.IsIndeterminate = false;
+            processBar.Visibility = Visibility.Collapsed;
+            continueAtion?.Invoke();
+        }
 
         private double findSimilarity(List<Subject> src, Subject dst, out Subject maxObj)
         {
@@ -243,10 +297,9 @@ namespace WpfApp2
             return subjects;
         }
 
-        private List<SubjectPlus> readInputText(string subjectPAT, string optionPAT)
+        private List<SubjectPlus> readInputText(string subjectPAT, string optionPAT, string input)
         {
             var subjectPlusList = new List<SubjectPlus>();
-            string input = inputBox.Text;
             var subjectRegex = new Regex(subjectPAT);
             var optionRegex = new Regex(optionPAT);
             var matches = subjectRegex.Matches(input);
