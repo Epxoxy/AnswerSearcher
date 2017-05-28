@@ -93,7 +93,6 @@
         </Style>
     </Window.Resources>
     <ScrollViewer>
-
         <Grid Background="#fafafa">
             <Grid.RowDefinitions>
                 <RowDefinition Height="auto"/>
