@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 
-namespace WpfApp2
+namespace AnswerSearcher
 {
     public class OverlayAdorner<TVisual> : Adorner, IDisposable where TVisual : UIElement, new()
     {

@@ -11,7 +11,7 @@ using System.Windows.Media;
 using System.Timers;
 using System.Windows.Shapes;
 
-namespace WpfApp2
+namespace AnswerSearcher
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml

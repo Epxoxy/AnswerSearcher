@@ -2,7 +2,7 @@
 using System.Windows;
 using System.Windows.Interop;
 
-namespace WpfApp2
+namespace AnswerSearcher
 {
     using System;
     using System.Runtime.InteropServices;
